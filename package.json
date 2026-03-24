@@ -3,9 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "scripts": {
-    "dev": "vercel dev"
-  },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
     "@vercel/kv": "^3.0.0"
