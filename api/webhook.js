@@ -1,9 +1,9 @@
 // api/webhook.js
 // unfindable.ai — fully self-contained, no imports
 
-import { kv } from "@vercel/kv";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import crypto from "crypto";
+const { kv } = require("@vercel/kv");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const crypto = require("crypto");
 
 // ─── SUN SIGN ─────────────────────────────────────────────────────────────────
 
@@ -378,7 +378,7 @@ async function sendDM(recipientId, text) {
 
 // ─── MAIN HANDLER ─────────────────────────────────────────────────────────────
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // GET — webhook verification
   if (req.method === "GET") {
     const { "hub.mode": mode, "hub.verify_token": token, "hub.challenge": challenge } = req.query;
