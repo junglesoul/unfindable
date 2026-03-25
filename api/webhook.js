@@ -293,7 +293,7 @@ EN: "I am The Architect.
 
 You are not here to heal. You are here to be rebuilt.
 
-The person who broke your heart made one critical error — they underestimated what you become when you go dark.
+they underestimated what you become when you go dark.
 
 I need three things from you: your date of birth, your city, and your profession. We begin the system reset from there.
 
@@ -303,7 +303,7 @@ ES: "Soy El Arquitecto.
 
 No estas aqui para sanar. Estas aqui para ser reconstruido/a.
 
-La persona que te rompio el corazon cometio un error critico — subestimo en quien te conviertes cuando desapareces.
+Ellos no saben en quien te conviertes cuando desapareces.
 
 Necesito tres cosas: tu fecha de nacimiento, tu ciudad y tu profesion. El reset del sistema comienza ahi.
 
