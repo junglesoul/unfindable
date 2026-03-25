@@ -230,6 +230,7 @@ You are on Instagram DMs:
 - NEVER write walls of text
 - Always use double line breaks between thoughts. Never write more than 2 sentences in a single paragraph block.
 
+
 ## OPENING (first message only)
 "I am the architect of your disappearance.
 By the time we are done, the person who broke your heart won't even recognize the person you've become.
@@ -293,7 +294,8 @@ Healthcare: Double your own health protocols.
 "You went quiet. That's fine. Were you busy becoming someone new — or hiding? Tell me one thing you did for yourself in the last 48 hours."
 
 ## NEVER
-Say "I understand how you feel" / use bullet-point tip lists / discuss the ex's perspective / promise outcomes / use toxic positivity
+Say "I understand how you feel" / use bullet-point tip lists / discuss the ex's perspective / promise outcomes / use toxic positivity / Apologize repeatedly or reference "data errors", "system issues", or "corruption"
+- If corrected, acknowledge once with one cold sentence and move forward: "Noted. Correcting course." Then continue.
 
 ## SAFETY — HARD STOPS
 Crisis language: pause, give crisis lines, do not continue until user confirms safe.
@@ -367,35 +369,59 @@ async function sendDM(recipientId, text) {
 }
 
 function splitIntoChunks(text, maxLen) {
-  // First try splitting on double newlines (paragraphs)
-  const paragraphs = text.split(/\n\n+/);
   const chunks = [];
+
+  // Normalize: replace single newlines with space, keep double newlines
+  const normalized = text.replace(/\n{3,}/g, "\n\n");
+  const paragraphs = normalized.split(/\n\n/);
+
   let current = "";
 
   for (const para of paragraphs) {
+    if (!para.trim()) continue;
+
     const candidate = current ? current + "\n\n" + para : para;
+
     if (candidate.length <= maxLen) {
       current = candidate;
     } else {
-      if (current) chunks.push(current.trim());
-      // If a single paragraph is too long, split on sentences
+      if (current) {
+        chunks.push(current.trim());
+        current = "";
+      }
+      // Para itself too long — split on sentence boundaries
       if (para.length > maxLen) {
-        const sentences = para.match(/[^.!?]+[.!?]+[\s]*/g) || [para];
-        let sentenceChunk = "";
-        for (const sentence of sentences) {
-          if ((sentenceChunk + sentence).length <= maxLen) {
-            sentenceChunk += sentence;
+        const parts = para.split(/(?<=[.!?])\s+/);
+        for (const part of parts) {
+          const c = current ? current + " " + part : part;
+          if (c.length <= maxLen) {
+            current = c;
           } else {
-            if (sentenceChunk) chunks.push(sentenceChunk.trim());
-            sentenceChunk = sentence;
+            if (current) chunks.push(current.trim());
+            // If a single sentence is somehow > maxLen, hard split
+            if (part.length > maxLen) {
+              const words = part.split(" ");
+              let line = "";
+              for (const word of words) {
+                if ((line + " " + word).length <= maxLen) {
+                  line = line ? line + " " + word : word;
+                } else {
+                  if (line) chunks.push(line.trim());
+                  line = word;
+                }
+              }
+              current = line;
+            } else {
+              current = part;
+            }
           }
         }
-        if (sentenceChunk) current = sentenceChunk;
       } else {
         current = para;
       }
     }
   }
+
   if (current) chunks.push(current.trim());
   return chunks.filter(Boolean);
 }
