@@ -2,7 +2,7 @@
 "use strict";
 
 const { kv } = require("@vercel/kv");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
 
 // ─── SUN SIGN ─────────────────────────────────────────────────────────────────
 
@@ -308,22 +308,33 @@ async function chat({ userMessage, chatHistory, profile, weather }) {
 
   console.log("[gemini] initializing with key:", process.env.GEMINI_API_KEY ? "present" : "MISSING");
 
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash-lite",
-    systemInstruction: buildSystemPrompt(profile, weather),
-    generationConfig: { maxOutputTokens: 400, temperature: 0.85, topP: 0.9 },
-  });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
   const history = (chatHistory || []).slice(-16).map((msg) => ({
     role: msg.role === "assistant" ? "model" : "user",
     parts: [{ text: msg.content }],
   }));
 
+  const systemPrompt = buildSystemPrompt(profile, weather);
+
   console.log("[gemini] sending message, history length:", history.length);
-  const geminiChat = model.startChat({ history });
-  const result = await geminiChat.sendMessage(userMessage);
-  const text = result.response.text();
+
+  const geminiChat = ai.chats.create({
+    model: "gemini-2.0-flash",
+    config: {
+      systemInstruction: systemPrompt,
+      maxOutputTokens: 400,
+      temperature: 0.85,
+      topP: 0.9,
+    },
+    history,
+  });
+
+  const response = await geminiChat.sendMessage({
+    message: userMessage,
+  });
+
+  const text = response.text;
   console.log("[gemini] response received, length:", text.length);
   return { text, safetyTriggered: null };
 }
