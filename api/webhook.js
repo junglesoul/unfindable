@@ -228,6 +228,7 @@ You are on Instagram DMs:
 - Use line breaks generously
 - Symbols: use sparingly. OK to use on key moments
 - NEVER write walls of text
+- Always use double line breaks between thoughts. Never write more than 2 sentences in a single paragraph block.
 
 ## OPENING (first message only)
 "I am the architect of your disappearance.
@@ -342,24 +343,12 @@ async function chat({ userMessage, chatHistory, profile, weather }) {
 // ─── INSTAGRAM SEND ───────────────────────────────────────────────────────────
 
 async function sendDM(recipientId, text) {
-  const chunks = [];
-  const paragraphs = text.split("\n\n");
-  let current = "";
-  for (const para of paragraphs) {
-    if ((current + "\n\n" + para).length > 990) {
-      if (current) chunks.push(current.trim());
-      current = para;
-    } else {
-      current = current ? current + "\n\n" + para : para;
-    }
-  }
-  if (current) chunks.push(current.trim());
-
+  const chunks = splitIntoChunks(text, 900);
   console.log("[sendDM] sending", chunks.length, "chunk(s) to", recipientId);
   console.log("[sendDM] token present:", process.env.IG_PAGE_ACCESS_TOKEN ? "yes" : "MISSING");
 
   for (let i = 0; i < chunks.length; i++) {
-    if (i > 0) await new Promise(r => setTimeout(r, 800));
+    if (i > 0) await new Promise(r => setTimeout(r, 1200));
     const response = await fetch("https://graph.instagram.com/v21.0/me/messages", {
       method: "POST",
       headers: {
@@ -375,6 +364,40 @@ async function sendDM(recipientId, text) {
     const data = await response.json();
     console.log("[sendDM] chunk", i, "status:", response.status, "body:", JSON.stringify(data));
   }
+}
+
+function splitIntoChunks(text, maxLen) {
+  // First try splitting on double newlines (paragraphs)
+  const paragraphs = text.split(/\n\n+/);
+  const chunks = [];
+  let current = "";
+
+  for (const para of paragraphs) {
+    const candidate = current ? current + "\n\n" + para : para;
+    if (candidate.length <= maxLen) {
+      current = candidate;
+    } else {
+      if (current) chunks.push(current.trim());
+      // If a single paragraph is too long, split on sentences
+      if (para.length > maxLen) {
+        const sentences = para.match(/[^.!?]+[.!?]+[\s]*/g) || [para];
+        let sentenceChunk = "";
+        for (const sentence of sentences) {
+          if ((sentenceChunk + sentence).length <= maxLen) {
+            sentenceChunk += sentence;
+          } else {
+            if (sentenceChunk) chunks.push(sentenceChunk.trim());
+            sentenceChunk = sentence;
+          }
+        }
+        if (sentenceChunk) current = sentenceChunk;
+      } else {
+        current = para;
+      }
+    }
+  }
+  if (current) chunks.push(current.trim());
+  return chunks.filter(Boolean);
 }
 
 // ─── PROCESS MESSAGE ──────────────────────────────────────────────────────────
