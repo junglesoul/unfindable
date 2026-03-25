@@ -320,7 +320,7 @@ async function chat({ userMessage, chatHistory, profile, weather }) {
   console.log("[gemini] sending message, history length:", history.length);
 
   const geminiChat = ai.chats.create({
-    model: "gemini-2.0-flash-001",
+    model: "gemini-2.5-flash",
     config: {
       systemInstruction: systemPrompt,
       maxOutputTokens: 400,
