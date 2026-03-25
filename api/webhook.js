@@ -21,7 +21,7 @@ function getSunSign(birthdate) {
   if (md >= 1122 && md <= 1221) return "Sagittarius";
   if (md >= 1222 || md <= 119) return "Capricorn";
   if (md >= 120 && md <= 218) return "Aquarius";
-  if (md >= 219 && md <= 320) return "Piscesmo
+  if (md >= 219 && md <= 320) return "Pisces";
   return null;
 }
 
