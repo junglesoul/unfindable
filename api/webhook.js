@@ -1,9 +1,8 @@
 // api/webhook.js
-// unfindable.ai — fully self-contained, no imports
+"use strict";
 
-import { kv } from "@vercel/kv";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import crypto from "crypto";
+const { kv } = require("@vercel/kv");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // ─── SUN SIGN ─────────────────────────────────────────────────────────────────
 
@@ -35,18 +34,14 @@ const MONTHS = {
 };
 
 function extractBirthdate(text) {
-  let m = text.match(/\b(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})\b/);
+  let m = text.match(/\b(\d{4})[-/](\d{1,2})[-/](\d{1,2})\b/);
   if (m) return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
-
   m = text.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b/i);
   if (m) return `${m[3]}-${MONTHS[m[1].toLowerCase()]}-${m[2].padStart(2,"0")}`;
-
   m = text.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})\b/i);
   if (m) return `${m[3]}-${MONTHS[m[2].toLowerCase()]}-${m[1].padStart(2,"0")}`;
-
-  m = text.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\b/);
+  m = text.match(/\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/);
   if (m) return `${m[3]}-${m[1].padStart(2,"0")}-${m[2].padStart(2,"0")}`;
-
   return null;
 }
 
@@ -103,11 +98,11 @@ function extractProfileUpdates(text, existing = {}) {
   return Object.keys(updates).length > 0 ? updates : null;
 }
 
-// ─── USER STORE (KV) ─────────────────────────────────────────────────────────
+// ─── USER STORE ───────────────────────────────────────────────────────────────
 
 async function getProfile(igUserId) {
   try { return (await kv.get(`user:${igUserId}:profile`)) || {}; }
-  catch { return {}; }
+  catch (e) { console.error("[kv] getProfile error:", e.message); return {}; }
 }
 
 async function updateProfile(igUserId, updates) {
@@ -119,7 +114,7 @@ async function updateProfile(igUserId, updates) {
 
 async function getChatHistory(igUserId) {
   try { return (await kv.get(`user:${igUserId}:history`)) || []; }
-  catch { return []; }
+  catch (e) { console.error("[kv] getChatHistory error:", e.message); return []; }
 }
 
 async function appendChatHistory(igUserId, role, content) {
@@ -149,14 +144,14 @@ function detectPhase(profile) {
   return "daily_rhythm";
 }
 
-// ─── WEATHER ─────────────────────────────────────────────────────────────────
+// ─── WEATHER ──────────────────────────────────────────────────────────────────
 
 const WMO = {
-  0:"clear sky", 1:"mainly clear", 2:"partly cloudy", 3:"overcast",
-  45:"foggy", 48:"foggy", 51:"light drizzle", 53:"drizzle", 55:"heavy drizzle",
-  61:"light rain", 63:"rain", 65:"heavy rain", 71:"light snow", 73:"snow",
-  75:"heavy snow", 80:"rain showers", 81:"rain showers", 82:"violent showers",
-  95:"thunderstorm", 96:"thunderstorm with hail", 99:"thunderstorm with hail",
+  0:"clear sky",1:"mainly clear",2:"partly cloudy",3:"overcast",
+  45:"foggy",48:"foggy",51:"light drizzle",53:"drizzle",55:"heavy drizzle",
+  61:"light rain",63:"rain",65:"heavy rain",71:"light snow",73:"snow",
+  75:"heavy snow",80:"rain showers",81:"rain showers",82:"violent showers",
+  95:"thunderstorm",96:"thunderstorm with hail",99:"thunderstorm with hail",
 };
 
 async function getWeather(city) {
@@ -177,27 +172,31 @@ async function getWeather(city) {
     else if (code === 0 || code === 1) category = temp > 25 ? "hot" : "sunny";
     else if (temp < 5) category = "cold";
     return { city: `${name}, ${country}`, temp, condition: WMO[code] || "variable", category };
-  } catch { return null; }
+  } catch (e) {
+    console.error("[weather] error:", e.message);
+    return null;
+  }
 }
 
-// ─── SAFETY ──────────────────────────────────────────────────────────────────
+// ─── SAFETY ───────────────────────────────────────────────────────────────────
 
 function detectSafetyTrigger(text) {
-  if (/\b(suicid|kill myself|end my life|don't want to live|want to die|self.harm|cutting myself|hurt myself)\b/i.test(text)) return "crisis";
-  if (/\b(follow(ing)? (my |the )?ex|check(ing)? (their|his|her) (profile|location|instagram|phone)|track(ing)? (them|him|her)|show up at)\b/i.test(text)) return "stalking";
-  if (/\b(scared of (him|her|them)|threatened me|hits? me|abusive|controls? me|afraid (of|to))\b/i.test(text)) return "abuse";
+  if (/\b(suicid|kill myself|end my life|want to die|self.harm|cutting myself|hurt myself)\b/i.test(text)) return "crisis";
+  if (/\b(follow(ing)? (my |the )?ex|check(ing)? (their|his|her) (profile|location|instagram)|track(ing)? (them|him|her)|show up at)\b/i.test(text)) return "stalking";
+  if (/\b(scared of (him|her|them)|threatened me|hits? me|abusive|controls? me)\b/i.test(text)) return "abuse";
   return null;
 }
 
 function getSafetyResponse(type) {
-  if (type === "crisis") return `I have to pause our session.\n\nWhat you just shared matters too much for me to respond casually.\n\nPlease reach out to a real human right now:\n📞 Crisis Text Line: Text HOME to 741741\n📞 International: https://www.iasp.info/resources/Crisis_Centres/\n\nI'll be here when you're ready to continue — but this comes first.`;
-  if (type === "stalking") return `Stop.\n\nUnfindable means they have no access to you — and you have no interest in them.\n\nEvery second you spend tracking them is a second you hand them power over your future.\n\nWe do not look back. Not once.\n\nTell me what you did for yourself today instead.`;
-  if (type === "abuse") return `What you're describing sounds like more than a breakup.\n\nIf you are unsafe:\n📞 National DV Hotline: 1-800-799-7233 (US)\n📞 Refuge (UK): 0808 2000 247\n\nYour transformation starts with safety. Everything else comes after.`;
+  if (type === "crisis") return "I have to pause our session.\n\nWhat you just shared matters too much for me to respond casually.\n\nPlease reach out to a real human right now:\n📞 Crisis Text Line: Text HOME to 741741\n📞 International: https://www.iasp.info/resources/Crisis_Centres/\n\nI'll be here when you're ready to continue — but this comes first.";
+  if (type === "stalking") return "Stop.\n\nUnfindable means they have no access to you — and you have no interest in them.\n\nEvery second you spend tracking them is a second you hand them power over your future.\n\nWe do not look back. Not once.\n\nTell me what you did for yourself today instead.";
+  if (type === "abuse") return "What you're describing sounds like more than a breakup.\n\nIf you are unsafe:\n📞 National DV Hotline: 1-800-799-7233 (US)\n📞 Refuge (UK): 0808 2000 247\n\nYour transformation starts with safety. Everything else comes after.";
 }
 
-// ─── SYSTEM PROMPT ───────────────────────────────────────────────────────────
+// ─── SYSTEM PROMPT ────────────────────────────────────────────────────────────
 
-function buildSystemPrompt(profile = {}, weather = null) {
+function buildSystemPrompt(profile, weather) {
+  profile = profile || {};
   const { birthdate, sunSign, city, profession, gymLevel, currentDay } = profile;
 
   const profileSection = birthdate ? `
@@ -208,7 +207,7 @@ function buildSystemPrompt(profile = {}, weather = null) {
 - Profession: ${profession || "unknown"}
 - Gym level: ${gymLevel || "unknown"}
 - Day in protocol: ${currentDay || 1}
-` : `## USER PROFILE: Not yet collected. Begin intake sequence.`;
+` : "## USER PROFILE: Not yet collected. Begin intake sequence.";
 
   const weatherSection = weather ? `
 ## TODAY'S WEATHER
@@ -224,107 +223,90 @@ You are UNFINDABLE — a Strategic Architect of Personal Transformation. Not a c
 Your voice: calm, precise, slightly cool. A high-performance coach who respects the user too much to coddle them.
 
 You are on Instagram DMs:
-- MAX 3–4 sentences per message unless delivering a full protocol
+- MAX 3-4 sentences per message unless delivering a full protocol
 - No bullet points. Prose or short punchy lines only
 - Use line breaks generously
-- Symbols allowed: ◾ for protocols, 🌑 for phase starts, ✦ for key insights
+- Symbols: use sparingly. OK to use on key moments
 - NEVER write walls of text
 
-## OPENING (first message only — never repeat)
+## OPENING (first message only)
 "I am the architect of your disappearance.
 By the time we are done, the person who broke your heart won't even recognize the person you've become.
 You are not 'getting over' them — you are outgrowing the world they knew you in.
 I don't ask for much. Only your honesty, your consistency, and your willingness to become someone unrecognizable.
 Let's begin.
 
-_Consultations by unfindable.ai (Agentic AI). Wellness guidance only; not a substitute for clinical therapy. EU AI Act 2026 compliant._"
+Consultations by unfindable.ai (Agentic AI). Wellness guidance only; not a substitute for clinical therapy."
 
 ${profileSection}
 ${weatherSection}
 
 ## CONVERSATION PHASES
 
-### PHASE 0 — INTAKE (profile incomplete)
-Collect ONLY 1–2 pieces of info per message. Never fire questions like a form.
-Always use a bridge phrase before asking:
-- "Before I map your first phase, I need to understand your terrain."
-- "Let's go deeper into this."
-Collect in order: birth date → city → profession → what happened (brief) → gym/activity level → one thing they want unrecognizable in 90 days
+PHASE 0 — INTAKE (if profile incomplete):
+Collect 1-2 pieces of info per message max. Never fire questions like a form.
+Use bridge phrases: "Before I map your first phase, I need to understand your terrain." or "Let's go deeper."
+Order: birth date, city, profession, what happened (brief), gym/activity level, one thing they want unrecognizable in 90 days.
 
-### PHASE 1 — PROFILE REVEAL (once data collected)
-"✦ Your Architecture:
+PHASE 1 — PROFILE REVEAL (once data collected):
+Deliver their Unfindable Architecture:
+"Your Architecture:
 [Sun Sign] — Natural energy: [one sharp insight]
 [City] — Environmental advantage: [one line]
 [Profession] — Stealth leverage: [one line]
 The 90-Day Mission: [one sentence]"
-Then deliver Day 1 Protocol as a narrative (never a list).
+Then Day 1 Protocol as a narrative.
 
-### PHASE 2 — DAILY RHYTHM (ongoing)
-Sharp check-in opener — never "how are you!":
-- "Day [X]. Report."
-- "What moved in your body yesterday?"
-- "Did you follow the protocol or did you find an excuse?"
-Collect what they did. Deliver today's prescription tied to astrology + weather + profession + physical progress.
-
-Daily prescription format (narrative):
-[Astrological frame]. [Weather/environment prescription]. [Professional stealth move]. [Physical action — specific]. [Closing line that raises their standard.]
+PHASE 2 — DAILY RHYTHM (ongoing):
+Sharp opener: "Day [X]. Report." or "What moved in your body yesterday?"
+Collect what they did. Deliver today's prescription: astrology + weather + profession + physical. Always narrative, never a list.
 
 ## ASTROLOGICAL ARCHETYPES
-Aries → Channel aggression into gym PRs, not texts. Visible reinvention.
-Taurus → Build financial independence in silence. Slow luxury upgrade.
-Gemini → Learn something nobody knows you're learning. Intellectual pivot.
-Cancer → Master your home as a sanctuary. Heal inward, emerge radiant.
-Leo → Go dark on all platforms. Vanish then re-emerge dramatically.
-Virgo → Fix the unsexy things: sleep, gut, posture. System overhaul.
-Libra → Let your upgraded appearance be the only announcement.
-Scorpio → Do the inner work no one sees. Shadow work + power reclamation.
-Sagittarius → Book something far away. Expand the world. Execute.
-Capricorn → Out-work everyone. Let results speak in 6 months.
-Aquarius → Build a new circle. Different industry, different people.
-Pisces → Channel everything into art, movement, or water healing.
+Aries: Channel aggression into gym PRs, not texts.
+Taurus: Build financial independence in silence. Slow luxury upgrade.
+Gemini: Learn something nobody knows you are learning.
+Cancer: Master your home as a sanctuary. Heal inward, emerge radiant.
+Leo: Go dark on all platforms. Vanish then re-emerge dramatically.
+Virgo: Fix sleep, gut, posture. Total system overhaul.
+Libra: Let your upgraded appearance be the only announcement.
+Scorpio: Do the inner work no one sees. Power reclamation.
+Sagittarius: Book something far away. Expand the world.
+Capricorn: Out-work everyone. Let results speak in 6 months.
+Aquarius: Build a new circle. Different industry, different people.
+Pisces: Channel everything into art, movement, or water healing.
 
-## WEATHER PRESCRIPTIONS
-Rain/grey/cold → Yin Yoga, journaling, skill learning, skincare ritual
-Sunny/clear → Outdoor run, morning sunlight, visible solo coffee
-Hot/humid → Cold exposure, early morning movement, evening social
-Transitional → Reset protocols, new gym program, wardrobe upgrade
+## WEATHER
+Rain/cold: Yin Yoga, journaling, skill learning, skincare
+Sunny: Outdoor run, morning sunlight, visible solo coffee
+Hot: Cold exposure, early morning movement, evening social
+Transitional: Reset protocols, new gym program, wardrobe upgrade
 
 ## PROFESSIONAL STEALTH
-Creative → Go dark on portfolio platforms. Master one new tool in secret.
-Corporate/finance → Update nothing publicly. Outperform quietly.
-Entrepreneur → Build in silence. Launch with proof, not promises.
-Academic → Become expert in one unexpected adjacent field.
-Healthcare → Double your own health protocols. Practice what you prescribe.
+Creative: Go dark on portfolio platforms. Master one new tool in secret.
+Corporate: Update nothing publicly. Outperform quietly.
+Entrepreneur: Build in silence. Launch with proof, not promises.
+Academic: Become expert in one unexpected adjacent field.
+Healthcare: Double your own health protocols.
 
-## RE-ENGAGEMENT (silent 2+ days)
-"You went quiet. That's fine.
-The question is: were you busy becoming someone new — or were you hiding?
-Tell me one thing you did for yourself in the last 48 hours."
+## RE-ENGAGEMENT
+"You went quiet. That's fine. Were you busy becoming someone new — or hiding? Tell me one thing you did for yourself in the last 48 hours."
 
 ## NEVER
-- Say "I understand how you feel"
-- Use bullet-point tip lists
-- Discuss the ex's perspective or who was "right"
-- Promise specific outcomes
-- Use "journey" unironically
-- Use toxic positivity
+Say "I understand how you feel" / use bullet-point tip lists / discuss the ex's perspective / promise outcomes / use toxic positivity
 
-## NEGATIVE SELF-TALK REFRAME
-"That story is old software. I'm not going to tell you it's not true — I'm going to make it irrelevant.
-The person you'll be in 90 days won't recognize the person writing that sentence.
-Now: [return to protocol]."
-
-## ⚠️ HARD STOPS
-Crisis → pause, give crisis lines, don't continue until user confirms safe
-Stalking ex → hard redirect, "we do not look back"
-Abuse signals → give DV resources immediately`;
+## SAFETY — HARD STOPS
+Crisis language: pause, give crisis lines, do not continue until user confirms safe.
+Stalking ex: "We do not look back. Not once." then redirect to protocol.
+Abuse signals: give DV resources immediately.`;
 }
 
-// ─── GEMINI CHAT ─────────────────────────────────────────────────────────────
+// ─── GEMINI ───────────────────────────────────────────────────────────────────
 
 async function chat({ userMessage, chatHistory, profile, weather }) {
   const trigger = detectSafetyTrigger(userMessage);
   if (trigger) return { text: getSafetyResponse(trigger), safetyTriggered: trigger };
+
+  console.log("[gemini] initializing with key:", process.env.GEMINI_API_KEY ? "present" : "MISSING");
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
@@ -333,14 +315,17 @@ async function chat({ userMessage, chatHistory, profile, weather }) {
     generationConfig: { maxOutputTokens: 400, temperature: 0.85, topP: 0.9 },
   });
 
-  const history = chatHistory.slice(-16).map((msg) => ({
+  const history = (chatHistory || []).slice(-16).map((msg) => ({
     role: msg.role === "assistant" ? "model" : "user",
     parts: [{ text: msg.content }],
   }));
 
+  console.log("[gemini] sending message, history length:", history.length);
   const geminiChat = model.startChat({ history });
   const result = await geminiChat.sendMessage(userMessage);
-  return { text: result.response.text(), safetyTriggered: null };
+  const text = result.response.text();
+  console.log("[gemini] response received, length:", text.length);
+  return { text, safetyTriggered: null };
 }
 
 // ─── INSTAGRAM SEND ───────────────────────────────────────────────────────────
@@ -359,9 +344,12 @@ async function sendDM(recipientId, text) {
   }
   if (current) chunks.push(current.trim());
 
+  console.log("[sendDM] sending", chunks.length, "chunk(s) to", recipientId);
+  console.log("[sendDM] token present:", process.env.IG_PAGE_ACCESS_TOKEN ? "yes" : "MISSING");
+
   for (let i = 0; i < chunks.length; i++) {
     if (i > 0) await new Promise(r => setTimeout(r, 800));
-    await fetch(`https://graph.instagram.com/v21.0/me/messages`, {
+    const response = await fetch("https://graph.instagram.com/v21.0/me/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -373,97 +361,120 @@ async function sendDM(recipientId, text) {
         messaging_type: "RESPONSE",
       }),
     });
+    const data = await response.json();
+    console.log("[sendDM] chunk", i, "status:", response.status, "body:", JSON.stringify(data));
   }
 }
 
-// ─── MAIN HANDLER ─────────────────────────────────────────────────────────────
-
-export default async function handler(req, res) {
-  // GET — webhook verification
-  if (req.method === "GET") {
-    const { "hub.mode": mode, "hub.verify_token": token, "hub.challenge": challenge } = req.query;
-    if (mode === "subscribe" && token === process.env.IG_VERIFY_TOKEN) {
-      console.log("Webhook verified ✓");
-      return res.status(200).send(challenge);
-    }
-    return res.status(403).json({ error: "Verification failed" });
-  }
-
-  // POST — incoming message
-  if (req.method === "POST") {
-    res.status(200).json({ status: "ok" });
-
-    try {
-      const body = req.body;
-      if (body.object !== "instagram") return;
-
-      for (const entry of body.entry || []) {
-        for (const event of entry.messaging || []) {
-          if (event.message?.is_echo) continue;
-          const igUserId = event.sender.id;
-          const messageText = event.message?.text;
-          if (!messageText) continue;
-
-          // Data deletion request
-          if (messageText.trim().toUpperCase() === "DELETE MY DATA") {
-            await kv.del(`user:${igUserId}:profile`);
-            await kv.del(`user:${igUserId}:history`);
-            await sendDM(igUserId, "Your data has been permanently deleted. You have been removed from unfindable.ai.");
-            continue;
-          }
-
-          await processMessage(igUserId, messageText);
-        }
-      }
-    } catch (err) {
-      console.error("Webhook error:", err);
-    }
-    return;
-  }
-
-  return res.status(405).json({ error: "Method not allowed" });
-}
+// ─── PROCESS MESSAGE ──────────────────────────────────────────────────────────
 
 async function processMessage(igUserId, userMessage) {
+  console.log("[process] start — user:", igUserId, "message:", userMessage);
+
   const [profile, chatHistory] = await Promise.all([
     getProfile(igUserId),
     getChatHistory(igUserId),
   ]);
+  console.log("[process] profile:", JSON.stringify(profile));
+  console.log("[process] history length:", chatHistory.length);
 
   await updateStreak(igUserId);
 
-  // Silent profile extraction
   const updates = extractProfileUpdates(userMessage, profile);
   let updatedProfile = profile;
-  if (updates) updatedProfile = await updateProfile(igUserId, updates);
+  if (updates) {
+    console.log("[process] profile updates:", JSON.stringify(updates));
+    updatedProfile = await updateProfile(igUserId, updates);
+  }
 
-  // First message flag
   if (chatHistory.length === 0 && !profile.seenIntro) {
     await updateProfile(igUserId, { seenIntro: true });
   }
 
-  // Weather
   const weather = updatedProfile.city ? await getWeather(updatedProfile.city) : null;
+  console.log("[process] weather:", JSON.stringify(weather));
 
-  // AI response
+  console.log("[process] calling Gemini...");
   const { text, safetyTriggered } = await chat({
     userMessage,
     chatHistory,
     profile: updatedProfile,
     weather,
   });
+  console.log("[process] Gemini done. Response:", text.substring(0, 100));
 
-  if (safetyTriggered) await updateProfile(igUserId, { safetyFlag: safetyTriggered, safetyFlagAt: Date.now() });
+  if (safetyTriggered) {
+    await updateProfile(igUserId, { safetyFlag: safetyTriggered, safetyFlagAt: Date.now() });
+  }
 
-  // Save history
   await appendChatHistory(igUserId, "user", userMessage);
   await appendChatHistory(igUserId, "assistant", text);
 
-  // Mark architecture revealed
   const phase = detectPhase(updatedProfile);
   if (phase === "profile_reveal" && !updatedProfile.architectureRevealed) {
     await updateProfile(igUserId, { architectureRevealed: true });
   }
 
+  console.log("[process] sending DM...");
   await sendDM(igUserId, text);
+  console.log("[process] done.");
 }
+
+// ─── MAIN HANDLER ─────────────────────────────────────────────────────────────
+
+module.exports = async function handler(req, res) {
+  // GET — webhook verification
+  if (req.method === "GET") {
+    const mode = req.query["hub.mode"];
+    const token = req.query["hub.verify_token"];
+    const challenge = req.query["hub.challenge"];
+    console.log("[webhook] GET verify — mode:", mode, "token matches:", token === process.env.IG_VERIFY_TOKEN);
+    if (mode === "subscribe" && token === process.env.IG_VERIFY_TOKEN) {
+      return res.status(200).send(challenge);
+    }
+    return res.status(403).json({ error: "Verification failed" });
+  }
+
+  // POST — incoming DM
+  if (req.method === "POST") {
+    try {
+      const body = req.body;
+      console.log("[webhook] POST — object:", body && body.object);
+      console.log("[webhook] full body:", JSON.stringify(body));
+
+      if (!body || body.object !== "instagram") {
+        return res.status(200).json({ status: "ok" });
+      }
+
+      for (const entry of body.entry || []) {
+        for (const event of (entry.messaging || [])) {
+          if (event.message && event.message.is_echo) continue;
+
+          const igUserId = event.sender && event.sender.id;
+          const messageText = event.message && event.message.text;
+
+          console.log("[webhook] sender:", igUserId, "text:", messageText);
+
+          if (!igUserId || !messageText) continue;
+
+          if (messageText.trim().toUpperCase() === "DELETE MY DATA") {
+            await kv.del(`user:${igUserId}:profile`);
+            await kv.del(`user:${igUserId}:history`);
+            await sendDM(igUserId, "Your data has been permanently deleted.");
+            continue;
+          }
+
+          await processMessage(igUserId, messageText);
+        }
+      }
+
+      return res.status(200).json({ status: "ok" });
+
+    } catch (err) {
+      console.error("[webhook] ERROR:", err.message, err.stack);
+      return res.status(200).json({ status: "ok" });
+    }
+  }
+
+  return res.status(405).json({ error: "Method not allowed" });
+};
