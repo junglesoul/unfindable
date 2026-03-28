@@ -805,7 +805,7 @@ async function chat({ userMessage, chatHistory, profile, weather, lang, session 
   const systemPrompt = buildSystemPrompt(profile, weather, lang, session);
 
   const geminiChat = ai.chats.create({
-    model: "gemini-2.5-flash-preview-04-17",
+    model: "gemini-2.5-flash-001",
     config: {
       systemInstruction: systemPrompt,
       maxOutputTokens: 1200,
